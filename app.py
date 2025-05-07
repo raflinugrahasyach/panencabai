@@ -200,7 +200,7 @@ def get_download_link(df, filename):
 
 # Main app header
 st.title("🌶️ Sistem Prediksi Panen Cabai")
-st.markdown("Prediksi hasil panen cabai menggunakan regresi linear berganda untuk kota Malang dan Lumajang")
+st.markdown("Prediksi hasil panen cabai menggunakan regresi linear berganda untuk Kabupaten Malang dan Lumajang")
 
 # Create sidebar menu
 menu = st.sidebar.selectbox("Menu", ["Dashboard", "Data Aktual", "Prediksi", "Hasil"])
@@ -334,7 +334,7 @@ elif menu == "Data Aktual":
     tab1, tab2 = st.tabs(["Malang", "Lumajang"])
     
     with tab1:
-        st.subheader("Data Kota Malang")
+        st.subheader("Data Kabupaten Malang")
         year_malang = st.selectbox("Pilih Tahun (Malang)", list(range(2018, 2023)), key='year_malang')
         
         # CRUD operations
