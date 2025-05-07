@@ -217,7 +217,7 @@ if menu == "Dashboard":
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader("Kota Malang")
+        st.subheader("Kabupaten Malang")
         city_data = pd.DataFrame()
         
         for year in range(2018, 2023):
