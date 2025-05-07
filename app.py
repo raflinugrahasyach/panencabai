@@ -202,8 +202,24 @@ def get_download_link(df, filename):
 st.title("🌶️ Sistem Prediksi Panen Cabai")
 st.markdown("Prediksi hasil panen cabai menggunakan regresi linear berganda untuk Kabupaten Malang dan Lumajang")
 
-# Create sidebar menu
-menu = st.sidebar.selectbox("Menu", ["Dashboard", "Data Aktual", "Prediksi", "Hasil"])
+st.sidebar.title("Menu Navigasi")
+dashboard_btn = st.sidebar.button("Dashboard", use_container_width=True)
+data_btn = st.sidebar.button("Data Aktual", use_container_width=True)
+predict_btn = st.sidebar.button("Prediksi", use_container_width=True)
+results_btn = st.sidebar.button("Hasil", use_container_width=True)
+
+if 'current_page' not in st.session_state:
+    st.session_state.current_page = "Dashboard"
+
+if dashboard_btn:
+    st.session_state.current_page = "Dashboard"
+if data_btn:
+    st.session_state.current_page = "Data Aktual"
+if predict_btn:
+    st.session_state.current_page = "Prediksi"
+if results_btn:
+    st.session_state.current_page = "Hasil"
+
 
 # Load example data if button is clicked
 if st.sidebar.button("Load Data Contoh"):
@@ -211,7 +227,7 @@ if st.sidebar.button("Load Data Contoh"):
     st.sidebar.success("Data contoh berhasil dimuat!")
 
 # Dashboard page
-if menu == "Dashboard":
+if st.session_state.current_page == "Dashboard":
     st.header("Dashboard Prediksi Panen Cabai")
     
     col1, col2 = st.columns(2)
@@ -328,7 +344,7 @@ if menu == "Dashboard":
         st.info("Data tidak cukup untuk perbandingan antar kota.")
 
 # Data Aktual page
-elif menu == "Data Aktual":
+elif st.session_state.current_page == "Data Aktual":
     st.header("Data Aktual Panen Cabai")
     
     tab1, tab2 = st.tabs(["Malang", "Lumajang"])
@@ -544,7 +560,7 @@ elif menu == "Data Aktual":
                 st.warning("Tidak ada model yang berhasil dilatih. Pastikan data cukup (minimal 3 baris per tahun).")
 
 # Prediction page
-elif menu == "Prediksi":
+elif st.session_state.current_page == "Prediksi":
     st.header("Prediksi Panen Cabai")
     
     col1, col2 = st.columns(2)
@@ -650,9 +666,44 @@ elif menu == "Prediksi":
                     st.pyplot(fig)
 
 # Results page
-elif menu == "Hasil":
+elif st.session_state.current_page == "Hasil":
     st.header("Riwayat Hasil Prediksi")
     
+    # Add RMSE table
+    st.subheader("Tabel RMSE Model")
+    
+    # Create dataframe for RMSE table
+    rmse_data = []
+    row_num = 1
+    
+    # Add Malang data
+    for year in sorted(st.session_state.rmse_malang.keys()):
+        rmse_data.append({
+            "No": row_num,
+            "Kota": "Kab. Malang",
+            "Tahun": year,
+            "RMSE": round(st.session_state.rmse_malang[year], 3)
+        })
+        row_num += 1
+    
+    # Add Lumajang data
+    for year in sorted(st.session_state.rmse_lumajang.keys()):
+        rmse_data.append({
+            "No": row_num,
+            "Kota": "Lumajang",
+            "Tahun": year,
+            "RMSE": round(st.session_state.rmse_lumajang[year], 3)
+        })
+        row_num += 1
+    
+    # Create and display table
+    if rmse_data:
+        rmse_df = pd.DataFrame(rmse_data)
+        st.table(rmse_df)
+    else:
+        st.info("Belum ada model yang dilatih. Silakan latih model di menu Data Aktual.")
+    
+    # Rest of the Hasil page code
     if not st.session_state.prediction_history:
         st.info("Belum ada hasil prediksi yang tersimpan. Silakan lakukan prediksi terlebih dahulu.")
     else:
