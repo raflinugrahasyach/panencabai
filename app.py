@@ -583,6 +583,33 @@ elif st.session_state.current_page == "Prediksi":
         
         year = st.selectbox("Pilih Tahun Model", sorted(model_years))
     
+    # ================= Helper Table ==================
+    st.markdown("### Tabel Penolong")
+    # Ambil data sesuai kota dan tahun
+    if city == "Malang":
+        df = st.session_state.data_malang[year].copy()
+    else:
+        df = st.session_state.data_lumajang[year].copy()
+
+    # Hitung kolom-kolom penolong
+    df["X12"]   = df["X1(CURAH HUJAN)"]       ** 2
+    df["X22"]   = df["X2(SUHU)"]              ** 2
+    df["X32"]   = df["X3(LUAS PANEN)"]        ** 2
+    df["Y2"]    = df["Y"]                     ** 2
+    df["X1Y"]   = df["X1(CURAH HUJAN)"]       * df["Y"]
+    df["X2Y"]   = df["X2(SUHU)"]              * df["Y"]
+    df["X3Y"]   = df["X3(LUAS PANEN)"]        * df["Y"]
+    df["X1X2"]  = df["X1(CURAH HUJAN)"]       * df["X2(SUHU)"]
+    df["X1X3"]  = df["X1(CURAH HUJAN)"]       * df["X3(LUAS PANEN)"]
+    df["X2X3"]  = df["X2(SUHU)"]              * df["X3(LUAS PANEN)"]
+
+    # Atur index menjadi label bulan
+    df.index = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"]
+
+    # Tampilkan tabel penolong
+    st.dataframe(df)
+    # ============================================
+
     st.markdown("### Input Data Prediksi")
     
     with st.form("prediction_form"):
