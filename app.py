@@ -625,11 +625,11 @@ elif st.session_state.current_page == "Prediksi":
     
     # ================= Tabel Penolong ==================
     st.markdown("### Tabel Penolong")
-    # Ambil data sesuai kota dan tahun
+    # Ambil data sesuai kota dan tahun model
     if city == "Malang":
-        df = st.session_state.data_malang[year].copy()
+        df = st.session_state.data_malang[model_year].copy()
     else:
-        df = st.session_state.data_lumajang[year].copy()
+        df = st.session_state.data_lumajang[model_year].copy()
 
     # Hitung kolom-kolom penolong
     df["X12"]   = df["X1(CURAH HUJAN)"]       ** 2
@@ -644,7 +644,13 @@ elif st.session_state.current_page == "Prediksi":
     df["X2X3"]  = df["X2(SUHU)"]              * df["X3(LUAS PANEN)"]
 
     # Atur index menjadi label bulan
-    df.index = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"]
+    # Cek jumlah data untuk menentukan label bulan yang sesuai
+    month_labels = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"]
+    if len(df) <= len(month_labels):
+        df.index = month_labels[:len(df)]
+    else:
+        # Jika data lebih dari 12 bulan, gunakan indeks numerik
+        df.index = [f"Data {i+1}" for i in range(len(df))]
 
     # Tampilkan tabel penolong
     st.dataframe(df)
@@ -667,7 +673,7 @@ elif st.session_state.current_page == "Prediksi":
         submit_button = st.form_submit_button("Prediksi")
         
         if submit_button:
-            result = predict(city, year, curah_hujan, suhu, luas_panen)
+            result = predict(city, model_year, curah_hujan, suhu, luas_panen)
             
             if result is not None:
                 st.success(f"Prediksi hasil panen cabai: {result:.3f} ton")
@@ -677,7 +683,7 @@ elif st.session_state.current_page == "Prediksi":
                 st.session_state.prediction_history.append({
                     "timestamp": timestamp,
                     "city": city,
-                    "year_model": year,
+                    "year_model": model_year,
                     "curah_hujan": curah_hujan,
                     "suhu": suhu,
                     "luas_panen": luas_panen,
@@ -707,8 +713,8 @@ elif st.session_state.current_page == "Prediksi":
                     st.markdown("**RMSE:** Tidak tersedia")
 
                 # Show visualization if we have data for that year
-                if city == "Malang" and not st.session_state.data_malang[year].empty:
-                    data = st.session_state.data_malang[year]
+                if city == "Malang" and not st.session_state.data_malang[model_year].empty:
+                    data = st.session_state.data_malang[model_year]
                     X = data[['X1(CURAH HUJAN)', 'X2(SUHU)', 'X3(LUAS PANEN)']]
                     y_actual = data['Y']
                     y_pred = model.predict(X)
@@ -719,12 +725,12 @@ elif st.session_state.current_page == "Prediksi":
                     ax.plot(range(1, len(y_pred) + 1), y_pred, 'r--', label='Prediksi')
                     ax.set_xlabel('Bulan')
                     ax.set_ylabel('Hasil Panen (ton)')
-                    ax.set_title(f'Perbandingan Hasil Aktual vs Prediksi - {city} {year}')
+                    ax.set_title(f'Perbandingan Hasil Aktual vs Prediksi - {city} {model_year}')
                     ax.legend()
                     st.pyplot(fig)
                 
-                elif city == "Lumajang" and not st.session_state.data_lumajang[year].empty:
-                    data = st.session_state.data_lumajang[year]
+                elif city == "Lumajang" and not st.session_state.data_lumajang[model_year].empty:
+                    data = st.session_state.data_lumajang[model_year]
                     X = data[['X1(CURAH HUJAN)', 'X2(SUHU)', 'X3(LUAS PANEN)']]
                     y_actual = data['Y']
                     y_pred = model.predict(X)
@@ -735,10 +741,10 @@ elif st.session_state.current_page == "Prediksi":
                     ax.plot(range(1, len(y_pred) + 1), y_pred, 'r--', label='Prediksi')
                     ax.set_xlabel('Bulan')
                     ax.set_ylabel('Hasil Panen (ton)')
-                    ax.set_title(f'Perbandingan Hasil Aktual vs Prediksi - {city} {year}')
+                    ax.set_title(f'Perbandingan Hasil Aktual vs Prediksi - {city} {model_year}')
                     ax.legend()
                     st.pyplot(fig)
-
+                    
 # Results page
 elif st.session_state.current_page == "Hasil":
     st.header("Riwayat Hasil Prediksi")
