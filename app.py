@@ -146,7 +146,7 @@ def train_model(city, year):
         data = st.session_state.data_lumajang[year]
     
     if len(data) < 3:  # Need at least 3 data points for meaningful regression
-        return None, None
+        return None
     
     X = data[['X1(CURAH HUJAN)', 'X2(SUHU)', 'X3(LUAS PANEN)']]
     y = data['Y']
@@ -156,7 +156,12 @@ def train_model(city, year):
     
     return model
 
+
 def evaluate_model(city, model_year, eval_year):
+    """
+    Evaluates a model by using model_year's model to predict eval_year's data
+    and calculates RMSE
+    """
     if city == "Malang":
         if model_year not in st.session_state.models_malang:
             return None
@@ -387,10 +392,14 @@ elif st.session_state.current_page == "Data Aktual":
                         st.success("Data berhasil ditambahkan!")
                         
                         # Train model after adding data
-                        model, rmse = train_model("Malang", year_malang)
+                        model = train_model("Malang", year_malang)
                         if model is not None:
-                            save_model("Malang", year_malang, model, rmse)
-                            st.success(f"Model untuk tahun {year_malang} berhasil dilatih! RMSE: {rmse:.4f}")
+                            save_model("Malang", year_malang, model)
+                            next_year = year_malang + 1
+                            if next_year in st.session_state.rmse_malang:
+                                st.success(f"Model untuk tahun {year_malang} berhasil dilatih! RMSE untuk prediksi tahun {next_year}: {st.session_state.rmse_malang[next_year]:.4f}")
+                            else:
+                                st.success(f"Model untuk tahun {year_malang} berhasil dilatih!")
         
         with crud_tabs[2]:  # Edit
             st.markdown("### Edit Data")
@@ -413,10 +422,14 @@ elif st.session_state.current_page == "Data Aktual":
                             st.success("Data berhasil diupdate!")
                             
                             # Retrain model after editing data
-                            model, rmse = train_model("Malang", year_malang)
+                            model = train_model("Malang", year_malang)
                             if model is not None:
-                                save_model("Malang", year_malang, model, rmse)
-                                st.success(f"Model untuk tahun {year_malang} berhasil dilatih ulang! RMSE: {rmse:.4f}")
+                                save_model("Malang", year_malang, model)
+                                next_year = year_malang + 1
+                                if next_year in st.session_state.rmse_malang:
+                                    st.success(f"Model untuk tahun {year_malang} berhasil dilatih ulang! RMSE untuk prediksi tahun {next_year}: {st.session_state.rmse_malang[next_year]:.4f}")
+                                else:
+                                    st.success(f"Model untuk tahun {year_malang} berhasil dilatih ulang!")
         
         with crud_tabs[3]:  # Delete
             st.markdown("### Hapus Data")
@@ -432,29 +445,35 @@ elif st.session_state.current_page == "Data Aktual":
                         st.success("Data berhasil dihapus!")
                         
                         # Retrain model after deleting data
-                        model, rmse = train_model("Malang", year_malang)
+                        model = train_model("Malang", year_malang)
                         if model is not None:
-                            save_model("Malang", year_malang, model, rmse)
-                            st.success(f"Model untuk tahun {year_malang} berhasil dilatih ulang! RMSE: {rmse:.4f}")
+                            save_model("Malang", year_malang, model)
+                            next_year = year_malang + 1
+                            if next_year in st.session_state.rmse_malang:
+                                st.success(f"Model untuk tahun {year_malang} berhasil dilatih ulang! RMSE untuk prediksi tahun {next_year}: {st.session_state.rmse_malang[next_year]:.4f}")
+                            else:
+                                st.success(f"Model untuk tahun {year_malang} berhasil dilatih ulang!")
         
         # Train all models button
         if st.button("Latih Semua Model untuk Malang"):
             success_count = 0
             for year in range(2018, 2022):  # Only train models for 2018-2021 (to predict 2019-2022)
                 if not st.session_state.data_malang[year].empty and len(st.session_state.data_malang[year]) >= 3:
-                    model = train_model("Malang", year_malang)
+                    model = train_model("Malang", year)
                     if model is not None:
-                        save_model("Malang", year_malang, model)
-                        next_year = year_malang + 1
+                        save_model("Malang", year, model)
+                        success_count += 1
+                        next_year = year + 1
                         if next_year in st.session_state.rmse_malang:
-                            st.success(f"Model untuk tahun {year_malang} berhasil dilatih! RMSE untuk prediksi tahun {next_year}: {st.session_state.rmse_malang[next_year]:.4f}")
+                            st.success(f"Model untuk tahun {year} berhasil dilatih! RMSE untuk prediksi tahun {next_year}: {st.session_state.rmse_malang[next_year]:.4f}")
                         else:
-                            st.success(f"Model untuk tahun {year_malang} berhasil dilatih!")
+                            st.success(f"Model untuk tahun {year} berhasil dilatih!")
             
             if success_count > 0:
                 st.success(f"{success_count} model berhasil dilatih untuk Malang!")
             else:
                 st.warning("Tidak ada model yang berhasil dilatih. Pastikan data cukup (minimal 3 baris per tahun).")
+
     
     with tab2:
         st.subheader("Data Kota Lumajang")
@@ -496,10 +515,14 @@ elif st.session_state.current_page == "Data Aktual":
                         st.success("Data berhasil ditambahkan!")
                         
                         # Train model after adding data
-                        model, rmse = train_model("Lumajang", year_lumajang)
+                        model = train_model("Lumajang", year_lumajang)
                         if model is not None:
-                            save_model("Lumajang", year_lumajang, model, rmse)
-                            st.success(f"Model untuk tahun {year_lumajang} berhasil dilatih! RMSE: {rmse:.4f}")
+                            save_model("Lumajang", year_lumajang, model)
+                            next_year = year_lumajang + 1
+                            if next_year in st.session_state.rmse_lumajang:
+                                st.success(f"Model untuk tahun {year_lumajang} berhasil dilatih! RMSE untuk prediksi tahun {next_year}: {st.session_state.rmse_lumajang[next_year]:.4f}")
+                            else:
+                                st.success(f"Model untuk tahun {year_lumajang} berhasil dilatih!")
         
         with crud_tabs[2]:  # Edit
             st.markdown("### Edit Data")
@@ -522,10 +545,14 @@ elif st.session_state.current_page == "Data Aktual":
                             st.success("Data berhasil diupdate!")
                             
                             # Retrain model after editing data
-                            model, rmse = train_model("Lumajang", year_lumajang)
+                            model = train_model("Lumajang", year_lumajang)
                             if model is not None:
-                                save_model("Lumajang", year_lumajang, model, rmse)
-                                st.success(f"Model untuk tahun {year_lumajang} berhasil dilatih ulang! RMSE: {rmse:.4f}")
+                                save_model("Lumajang", year_lumajang, model)
+                                next_year = year_lumajang + 1
+                                if next_year in st.session_state.rmse_lumajang:
+                                    st.success(f"Model untuk tahun {year_lumajang} berhasil dilatih ulang! RMSE untuk prediksi tahun {next_year}: {st.session_state.rmse_lumajang[next_year]:.4f}")
+                                else:
+                                    st.success(f"Model untuk tahun {year_lumajang} berhasil dilatih ulang!")
         
         with crud_tabs[3]:  # Delete
             st.markdown("### Hapus Data")
@@ -541,20 +568,29 @@ elif st.session_state.current_page == "Data Aktual":
                         st.success("Data berhasil dihapus!")
                         
                         # Retrain model after deleting data
-                        model, rmse = train_model("Lumajang", year_lumajang)
+                        model = train_model("Lumajang", year_lumajang)
                         if model is not None:
-                            save_model("Lumajang", year_lumajang, model, rmse)
-                            st.success(f"Model untuk tahun {year_lumajang} berhasil dilatih ulang! RMSE: {rmse:.4f}")
+                            save_model("Lumajang", year_lumajang, model)
+                            next_year = year_lumajang + 1
+                            if next_year in st.session_state.rmse_lumajang:
+                                st.success(f"Model untuk tahun {year_lumajang} berhasil dilatih ulang! RMSE untuk prediksi tahun {next_year}: {st.session_state.rmse_lumajang[next_year]:.4f}")
+                            else:
+                                st.success(f"Model untuk tahun {year_lumajang} berhasil dilatih ulang!")
         
         # Train all models button
         if st.button("Latih Semua Model untuk Lumajang"):
             success_count = 0
-            for year in range(2018, 2023):
+            for year in range(2018, 2022):  # Only train models for 2018-2021 (to predict 2019-2022)
                 if not st.session_state.data_lumajang[year].empty and len(st.session_state.data_lumajang[year]) >= 3:
-                    model, rmse = train_model("Lumajang", year)
+                    model = train_model("Lumajang", year)
                     if model is not None:
-                        save_model("Lumajang", year, model, rmse)
+                        save_model("Lumajang", year, model)
                         success_count += 1
+                        next_year = year + 1
+                        if next_year in st.session_state.rmse_lumajang:
+                            st.success(f"Model untuk tahun {year} berhasil dilatih! RMSE untuk prediksi tahun {next_year}: {st.session_state.rmse_lumajang[next_year]:.4f}")
+                        else:
+                            st.success(f"Model untuk tahun {year} berhasil dilatih!")
             
             if success_count > 0:
                 st.success(f"{success_count} model berhasil dilatih untuk Lumajang!")
@@ -650,21 +686,26 @@ elif st.session_state.current_page == "Prediksi":
                 
                 # Show model details
                 st.markdown("### Detail Model")
-                
+
                 if city == "Malang":
-                    model = st.session_state.models_malang[year]
-                    rmse = st.session_state.rmse_malang[year]
+                    model = st.session_state.models_malang[model_year]
+                    next_year = model_year + 1
+                    rmse = st.session_state.rmse_malang.get(next_year, None)
                 else:
-                    model = st.session_state.models_lumajang[year]
-                    rmse = st.session_state.rmse_lumajang[year]
-                
+                    model = st.session_state.models_lumajang[model_year]
+                    next_year = model_year + 1
+                    rmse = st.session_state.rmse_lumajang.get(next_year, None)
+
                 coefficients = model.coef_
                 intercept = model.intercept_
                 
                 st.markdown(f"**Persamaan Model:**")
                 st.markdown(f"Y = {intercept:.4f} + {coefficients[0]:.4f}X₁ + {coefficients[1]:.4f}X₂ + {coefficients[2]:.4f}X₃")
-                st.markdown(f"**RMSE:** {rmse:.4f}")
-                
+                if rmse is not None:
+                    st.markdown(f"**RMSE untuk prediksi tahun {next_year}:** {rmse:.4f}")
+                else:
+                    st.markdown("**RMSE:** Tidak tersedia")
+
                 # Show visualization if we have data for that year
                 if city == "Malang" and not st.session_state.data_malang[year].empty:
                     data = st.session_state.data_malang[year]
