@@ -690,27 +690,27 @@ elif st.session_state.current_page == "Prediksi":
                     "prediction": result
                 })
                 
-                # # Show model details
-                # st.markdown("### Detail Model")
+                # Show model details
+                st.markdown("### Detail Model")
 
-                # if city == "Malang":
-                #     model = st.session_state.models_malang[model_year]
-                #     next_year = model_year + 1
-                #     rmse = st.session_state.rmse_malang.get(next_year, None)
-                # else:
-                #     model = st.session_state.models_lumajang[model_year]
-                #     next_year = model_year + 1
-                #     rmse = st.session_state.rmse_lumajang.get(next_year, None)
+                if city == "Malang":
+                    model = st.session_state.models_malang[model_year]
+                    next_year = model_year + 1
+                    rmse = st.session_state.rmse_malang.get(next_year, None)
+                else:
+                    model = st.session_state.models_lumajang[model_year]
+                    next_year = model_year + 1
+                    rmse = st.session_state.rmse_lumajang.get(next_year, None)
 
-                # coefficients = model.coef_
-                # intercept = model.intercept_
+                coefficients = model.coef_
+                intercept = model.intercept_
                 
-                # st.markdown(f"**Persamaan Model:**")
-                # st.markdown(f"Y = {intercept:.4f} + {coefficients[0]:.4f}X₁ + {coefficients[1]:.4f}X₂ + {coefficients[2]:.4f}X₃")
-                # if rmse is not None:
-                #     st.markdown(f"**RMSE untuk prediksi tahun {next_year}:** {rmse:.4f}")
-                # else:
-                #     st.markdown("**RMSE:** Tidak tersedia")
+                st.markdown(f"**Persamaan Model:**")
+                st.markdown(f"Y = {intercept:.4f} + {coefficients[0]:.4f}X₁ + {coefficients[1]:.4f}X₂ + {coefficients[2]:.4f}X₃")
+                if rmse is not None:
+                    st.markdown(f"**RMSE untuk prediksi tahun {next_year}:** {rmse:.4f}")
+                else:
+                    st.markdown("**RMSE:** Tidak tersedia")
 
                 # Show visualization if we have data for that year
                 if city == "Malang" and not st.session_state.data_malang[model_year].empty:
