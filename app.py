@@ -121,13 +121,22 @@ if 'prediction_history' not in st.session_state:
     st.session_state.prediction_history = []
 
 # Function to save models
-def save_model(city, year, model, rmse):
+def save_model(city, year, model):
     if city == "Malang":
         st.session_state.models_malang[year] = model
-        st.session_state.rmse_malang[year] = rmse
     else:
         st.session_state.models_lumajang[year] = model
-        st.session_state.rmse_lumajang[year] = rmse
+    
+    # Calculate RMSE for next year if data exists
+    next_year = year + 1
+    if next_year <= 2022:
+        rmse = evaluate_model(city, year, next_year)
+        if rmse is not None:
+            if city == "Malang":
+                st.session_state.rmse_malang[next_year] = rmse
+            else:
+                st.session_state.rmse_lumajang[next_year] = rmse
+
 
 # Function to train models
 def train_model(city, year):
@@ -145,22 +154,43 @@ def train_model(city, year):
     model = LinearRegression()
     model.fit(X, y)
     
-    # Calculate RMSE
-    y_pred = model.predict(X)
-    rmse = np.sqrt(mean_squared_error(y, y_pred))
+    return model
+
+def evaluate_model(city, model_year, eval_year):
+    if city == "Malang":
+        if model_year not in st.session_state.models_malang:
+            return None
+        if eval_year not in st.session_state.data_malang:
+            return None
+        model = st.session_state.models_malang[model_year]
+        eval_data = st.session_state.data_malang[eval_year]
+    else:
+        if model_year not in st.session_state.models_lumajang:
+            return None
+        if eval_year not in st.session_state.data_lumajang:
+            return None
+        model = st.session_state.models_lumajang[model_year]
+        eval_data = st.session_state.data_lumajang[eval_year]
     
-    return model, rmse
+    X_eval = eval_data[['X1(CURAH HUJAN)', 'X2(SUHU)', 'X3(LUAS PANEN)']]
+    y_actual = eval_data['Y']
+    
+    y_pred = model.predict(X_eval)
+    rmse = np.sqrt(mean_squared_error(y_actual, y_pred))
+    
+    return rmse
+
 
 # Function to make predictions
-def predict(city, year, curah_hujan, suhu, luas_panen):
+def predict(city, model_year, curah_hujan, suhu, luas_panen):
     if city == "Malang":
-        if year not in st.session_state.models_malang:
+        if model_year not in st.session_state.models_malang:
             return None
-        model = st.session_state.models_malang[year]
+        model = st.session_state.models_malang[model_year]
     else:
-        if year not in st.session_state.models_lumajang:
+        if model_year not in st.session_state.models_lumajang:
             return None
-        model = st.session_state.models_lumajang[year]
+        model = st.session_state.models_lumajang[model_year]
     
     prediction = model.predict([[curah_hujan, suhu, luas_panen]])
     return prediction[0]
@@ -410,12 +440,16 @@ elif st.session_state.current_page == "Data Aktual":
         # Train all models button
         if st.button("Latih Semua Model untuk Malang"):
             success_count = 0
-            for year in range(2018, 2023):
+            for year in range(2018, 2022):  # Only train models for 2018-2021 (to predict 2019-2022)
                 if not st.session_state.data_malang[year].empty and len(st.session_state.data_malang[year]) >= 3:
-                    model, rmse = train_model("Malang", year)
+                    model = train_model("Malang", year_malang)
                     if model is not None:
-                        save_model("Malang", year, model, rmse)
-                        success_count += 1
+                        save_model("Malang", year_malang, model)
+                        next_year = year_malang + 1
+                        if next_year in st.session_state.rmse_malang:
+                            st.success(f"Model untuk tahun {year_malang} berhasil dilatih! RMSE untuk prediksi tahun {next_year}: {st.session_state.rmse_malang[next_year]:.4f}")
+                        else:
+                            st.success(f"Model untuk tahun {year_malang} berhasil dilatih!")
             
             if success_count > 0:
                 st.success(f"{success_count} model berhasil dilatih untuk Malang!")
@@ -542,12 +576,16 @@ elif st.session_state.current_page == "Prediksi":
             model_years = list(st.session_state.models_malang.keys())
         else:
             model_years = list(st.session_state.models_lumajang.keys())
-        
+
         if not model_years:
             st.error(f"Belum ada model terlatih untuk kota {city}. Harap latih model terlebih dahulu di menu Data Aktual.")
             st.stop()
-        
-        year = st.selectbox("Pilih Tahun Model", sorted(model_years))
+
+        model_year = st.selectbox("Pilih Tahun Model", sorted(model_years))
+        prediction_year = st.selectbox("Pilih Tahun Prediksi", 
+                                    [year for year in range(2019, 2023) if year > model_year], 
+                                    format_func=lambda x: f"{x} (menggunakan model {model_year})")
+
     
     # ================= Tabel Penolong ==================
     st.markdown("### Tabel Penolong")
@@ -676,17 +714,20 @@ elif st.session_state.current_page == "Hasil":
         rmse_data.append({
             "No": row_num,
             "Kota": "Kab. Malang",
-            "Tahun": year,
+            "Tahun Prediksi": year,
+            "Tahun Model": year - 1,  # The model used is from previous year
             "RMSE": round(st.session_state.rmse_malang[year], 3)
         })
         row_num += 1
+
     
     # Add Lumajang data
     for year in sorted(st.session_state.rmse_lumajang.keys()):
         rmse_data.append({
             "No": row_num,
             "Kota": "Lumajang",
-            "Tahun": year,
+            "Tahun Prediksi": year,
+            "Tahun Model": year - 1,  # The model used is from previous year
             "RMSE": round(st.session_state.rmse_lumajang[year], 3)
         })
         row_num += 1
