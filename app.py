@@ -120,6 +120,20 @@ if 'rmse_lumajang' not in st.session_state:
 if 'prediction_history' not in st.session_state:
     st.session_state.prediction_history = []
 
+# Initialize data structures for each year
+for year in range(2018, 2023):
+    if year not in st.session_state.data_malang:
+        st.session_state.data_malang[year] = pd.DataFrame(columns=['X1(CURAH HUJAN)', 'X2(SUHU)', 'X3(LUAS PANEN)', 'Y'])
+    
+    if year not in st.session_state.data_lumajang:
+        st.session_state.data_lumajang[year] = pd.DataFrame(columns=['X1(CURAH HUJAN)', 'X2(SUHU)', 'X3(LUAS PANEN)', 'Y'])
+
+if 'selected_prediction_data' not in st.session_state:
+    st.session_state.selected_prediction_data = {}
+
+if 'prediction_results' not in st.session_state:
+    st.session_state.prediction_results = {}
+
 # Function to save models
 def save_model(city, year, model):
     if city == "Malang":
@@ -597,9 +611,11 @@ elif st.session_state.current_page == "Data Aktual":
             else:
                 st.warning("Tidak ada model yang berhasil dilatih. Pastikan data cukup (minimal 3 baris per tahun).")
 
-# Prediction page
 elif st.session_state.current_page == "Prediksi":
     st.header("Prediksi Panen Cabai")
+    
+    # Step 1: Pilih Data Aktual untuk Prediksi
+    st.subheader("Step 1: Pilih Data Aktual untuk Prediksi")
     
     col1, col2 = st.columns(2)
     
@@ -607,56 +623,31 @@ elif st.session_state.current_page == "Prediksi":
         city = st.selectbox("Pilih Kota", ["Malang", "Lumajang"])
     
     with col2:
-        model_years = []
+        # Cari tahun yang memiliki data
+        available_years = []
         if city == "Malang":
-            model_years = list(st.session_state.models_malang.keys())
+            for year in range(2018, 2023):
+                if not st.session_state.data_malang[year].empty and len(st.session_state.data_malang[year]) >= 3:
+                    available_years.append(year)
         else:
-            model_years = list(st.session_state.models_lumajang.keys())
-
-        if not model_years:
-            st.error(f"Belum ada model terlatih untuk kota {city}. Harap latih model terlebih dahulu di menu Data Aktual.")
+            for year in range(2018, 2023):
+                if not st.session_state.data_lumajang[year].empty and len(st.session_state.data_lumajang[year]) >= 3:
+                    available_years.append(year)
+        
+        if not available_years:
+            st.error(f"Belum ada data yang cukup untuk kota {city}. Minimal 3 data per tahun diperlukan.")
             st.stop()
-
-        model_year = st.selectbox("Pilih Tahun Model", sorted(model_years))
-        prediction_year = st.selectbox("Pilih Tahun Prediksi", 
-                                    [year for year in range(2019, 2023) if year > model_year], 
-                                    format_func=lambda x: f"{x} (menggunakan model {model_year})")
-
+        
+        selected_data_year = st.selectbox("Pilih Tahun Data untuk Model", available_years)
     
-    # ================= Tabel Penolong ==================
-    st.markdown("### Tabel Penolong")
-    # Ambil data sesuai kota dan tahun model
-    if city == "Malang":
-        df = st.session_state.data_malang[model_year].copy()
-    else:
-        df = st.session_state.data_lumajang[model_year].copy()
-
-    # Hitung kolom-kolom penolong
-    df["X12"]   = df["X1(CURAH HUJAN)"]       ** 2
-    df["X22"]   = df["X2(SUHU)"]              ** 2
-    df["X32"]   = df["X3(LUAS PANEN)"]        ** 2
-    df["Y2"]    = df["Y"]                     ** 2
-    df["X1Y"]   = df["X1(CURAH HUJAN)"]       * df["Y"]
-    df["X2Y"]   = df["X2(SUHU)"]              * df["Y"]
-    df["X3Y"]   = df["X3(LUAS PANEN)"]        * df["Y"]
-    df["X1X2"]  = df["X1(CURAH HUJAN)"]       * df["X2(SUHU)"]
-    df["X1X3"]  = df["X1(CURAH HUJAN)"]       * df["X3(LUAS PANEN)"]
-    df["X2X3"]  = df["X2(SUHU)"]              * df["X3(LUAS PANEN)"]
-
-    # Atur index menjadi label bulan
-    # Cek jumlah data untuk menentukan label bulan yang sesuai
-    month_labels = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"]
-    if len(df) <= len(month_labels):
-        df.index = month_labels[:len(df)]
-    else:
-        # Jika data lebih dari 12 bulan, gunakan indeks numerik
-        df.index = [f"Data {i+1}" for i in range(len(df))]
-
-    # Tampilkan tabel penolong
-    st.dataframe(df)
-    # ============================================
-
-    st.markdown("### Input Data Prediksi")
+    # Step 2: Tentukan Tahun yang akan Diprediksi
+    st.subheader("Step 2: Tentukan Tahun yang akan Diprediksi")
+    
+    prediction_year = st.selectbox("Pilih Tahun yang akan Diprediksi", 
+                                 [year for year in range(2019, 2024) if year > selected_data_year])
+    
+    # Step 3: Input Data untuk Prediksi
+    st.subheader("Step 3: Input Data untuk Prediksi")
     
     with st.form("prediction_form"):
         col1, col2, col3 = st.columns(3)
@@ -670,245 +661,250 @@ elif st.session_state.current_page == "Prediksi":
         with col3:
             luas_panen = st.number_input("Luas Panen (ha)", min_value=0.0, format="%.3f")
         
-        submit_button = st.form_submit_button("Prediksi")
+        submit_button = st.form_submit_button("Lakukan Prediksi")
         
         if submit_button:
-            result = predict(city, model_year, curah_hujan, suhu, luas_panen)
+            # Train model dengan data yang dipilih
+            if city == "Malang":
+                data = st.session_state.data_malang[selected_data_year]
+            else:
+                data = st.session_state.data_lumajang[selected_data_year]
             
-            if result is not None:
-                st.success(f"Prediksi hasil panen cabai: {result:.3f} ton")
-                
-                # Add to prediction history
-                timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                st.session_state.prediction_history.append({
-                    "timestamp": timestamp,
-                    "city": city,
-                    "year_model": model_year,
-                    "curah_hujan": curah_hujan,
-                    "suhu": suhu,
-                    "luas_panen": luas_panen,
-                    "prediction": result
-                })
-                
-                # Show model details
-                st.markdown("### Detail Model")
-
-                if city == "Malang":
-                    model = st.session_state.models_malang[model_year]
-                    next_year = model_year + 1
-                    rmse = st.session_state.rmse_malang.get(next_year, None)
-                else:
-                    model = st.session_state.models_lumajang[model_year]
-                    next_year = model_year + 1
-                    rmse = st.session_state.rmse_lumajang.get(next_year, None)
-
-                coefficients = model.coef_
-                intercept = model.intercept_
-                
-                st.markdown(f"**Persamaan Model:**")
-                st.markdown(f"Y = {intercept:.4f} + {coefficients[0]:.4f}X₁ + {coefficients[1]:.4f}X₂ + {coefficients[2]:.4f}X₃")
-                if rmse is not None:
-                    st.markdown(f"**RMSE untuk prediksi tahun {next_year}:** {rmse:.4f}")
-                else:
-                    st.markdown("**RMSE:** Tidak tersedia")
-
-                # Show visualization if we have data for that year
-                if city == "Malang" and not st.session_state.data_malang[model_year].empty:
-                    data = st.session_state.data_malang[model_year]
-                    X = data[['X1(CURAH HUJAN)', 'X2(SUHU)', 'X3(LUAS PANEN)']]
-                    y_actual = data['Y']
-                    y_pred = model.predict(X)
+            # Train model
+            X = data[['X1(CURAH HUJAN)', 'X2(SUHU)', 'X3(LUAS PANEN)']]
+            y = data['Y']
+            
+            model = LinearRegression()
+            model.fit(X, y)
+            
+            # Lakukan prediksi
+            prediction = model.predict([[curah_hujan, suhu, luas_panen]])[0]
+            
+            # Simpan hasil prediksi
+            prediction_key = f"{city}_{selected_data_year}_{prediction_year}"
+            st.session_state.selected_prediction_data[prediction_key] = {
+                'city': city,
+                'data_year': selected_data_year,
+                'prediction_year': prediction_year,
+                'model': model,
+                'data': data,
+                'input_data': {
+                    'curah_hujan': curah_hujan,
+                    'suhu': suhu,
+                    'luas_panen': luas_panen
+                },
+                'prediction': prediction
+            }
+            
+            st.success(f"Prediksi berhasil! Hasil prediksi: {prediction:.3f} ton")
+            
+            # Tampilkan Tabel Penolong
+            st.subheader("Tabel Penolong")
+            
+            df = data.copy()
+            # Hitung kolom-kolom penolong
+            df["X12"] = df["X1(CURAH HUJAN)"] ** 2
+            df["X22"] = df["X2(SUHU)"] ** 2
+            df["X32"] = df["X3(LUAS PANEN)"] ** 2
+            df["Y2"] = df["Y"] ** 2
+            df["X1Y"] = df["X1(CURAH HUJAN)"] * df["Y"]
+            df["X2Y"] = df["X2(SUHU)"] * df["Y"]
+            df["X3Y"] = df["X3(LUAS PANEN)"] * df["Y"]
+            df["X1X2"] = df["X1(CURAH HUJAN)"] * df["X2(SUHU)"]
+            df["X1X3"] = df["X1(CURAH HUJAN)"] * df["X3(LUAS PANEN)"]
+            df["X2X3"] = df["X2(SUHU)"] * df["X3(LUAS PANEN)"]
+            
+            # Atur index menjadi label bulan
+            month_labels = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"]
+            if len(df) <= len(month_labels):
+                df.index = month_labels[:len(df)]
+            else:
+                df.index = [f"Data {i+1}" for i in range(len(df))]
+            
+            st.dataframe(df)
+            
+            # Tampilkan Persamaan Regresi
+            st.subheader("Persamaan Regresi")
+            coefficients = model.coef_
+            intercept = model.intercept_
+            
+            st.markdown(f"**Y = {intercept:.4f} + {coefficients[0]:.4f}X₁ + {coefficients[1]:.4f}X₂ + {coefficients[2]:.4f}X₃**")
+            st.markdown(f"- a (konstanta) = {intercept:.4f}")
+            st.markdown(f"- b₁ (koefisien curah hujan) = {coefficients[0]:.4f}")
+            st.markdown(f"- b₂ (koefisien suhu) = {coefficients[1]:.4f}")
+            st.markdown(f"- b₃ (koefisien luas panen) = {coefficients[2]:.4f}")
                     
-                    # Plot actual vs predicted
-                    fig, ax = plt.subplots(figsize=(10, 5))
-                    ax.plot(range(1, len(y_actual) + 1), y_actual, 'b-', label='Aktual')
-                    ax.plot(range(1, len(y_pred) + 1), y_pred, 'r--', label='Prediksi')
-                    ax.set_xlabel('Bulan')
-                    ax.set_ylabel('Hasil Panen (ton)')
-                    ax.set_title(f'Perbandingan Hasil Aktual vs Prediksi - {city} {model_year}')
-                    ax.legend()
-                    st.pyplot(fig)
-                
-                elif city == "Lumajang" and not st.session_state.data_lumajang[model_year].empty:
-                    data = st.session_state.data_lumajang[model_year]
-                    X = data[['X1(CURAH HUJAN)', 'X2(SUHU)', 'X3(LUAS PANEN)']]
-                    y_actual = data['Y']
-                    y_pred = model.predict(X)
-                    
-                    # Plot actual vs predicted
-                    fig, ax = plt.subplots(figsize=(10, 5))
-                    ax.plot(range(1, len(y_actual) + 1), y_actual, 'b-', label='Aktual')
-                    ax.plot(range(1, len(y_pred) + 1), y_pred, 'r--', label='Prediksi')
-                    ax.set_xlabel('Bulan')
-                    ax.set_ylabel('Hasil Panen (ton)')
-                    ax.set_title(f'Perbandingan Hasil Aktual vs Prediksi - {city} {model_year}')
-                    ax.legend()
-                    st.pyplot(fig)
-                    
-# Results page
 elif st.session_state.current_page == "Hasil":
-    st.header("Riwayat Hasil Prediksi")
+    st.header("Hasil Prediksi")
     
-    # Add RMSE table
-    st.subheader("Tabel RMSE Model")
-    
-    # Create dataframe for RMSE table
-    rmse_data = []
-    row_num = 1
-    
-    # Add Malang data
-    for year in sorted(st.session_state.rmse_malang.keys()):
-        rmse_data.append({
-            "No": row_num,
-            "Kota": "Kab. Malang",
-            "Tahun Prediksi": year,
-            "Tahun Model": year - 1,  # The model used is from previous year
-            "RMSE": round(st.session_state.rmse_malang[year], 3)
-        })
-        row_num += 1
-
-    
-    # Add Lumajang data
-    for year in sorted(st.session_state.rmse_lumajang.keys()):
-        rmse_data.append({
-            "No": row_num,
-            "Kota": "Lumajang",
-            "Tahun Prediksi": year,
-            "Tahun Model": year - 1,  # The model used is from previous year
-            "RMSE": round(st.session_state.rmse_lumajang[year], 3)
-        })
-        row_num += 1
-    
-    # Create and display table
-    if rmse_data:
-        rmse_df = pd.DataFrame(rmse_data)
-        st.table(rmse_df)
+    if not st.session_state.selected_prediction_data:
+        st.info("Belum ada prediksi yang dilakukan. Silakan lakukan prediksi terlebih dahulu di menu Prediksi.")
     else:
-        st.info("Belum ada model yang dilatih. Silakan latih model di menu Data Aktual.")
-    
-    # Tambahkan tabel persamaan regresi
-    st.subheader("Tabel Persamaan Regresi Model")
-
-    # Buat dataframe untuk tabel persamaan regresi
-    regression_data = []
-    row_num = 1
-
-    # Tambahkan data Malang
-    for year in sorted(st.session_state.models_malang.keys()):
-        model = st.session_state.models_malang[year]
-        coefficients = model.coef_
-        intercept = model.intercept_
+        # Pilih hasil prediksi yang akan ditampilkan
+        prediction_options = []
+        for key, value in st.session_state.selected_prediction_data.items():
+            option_text = f"{value['city']} - Model {value['data_year']} untuk prediksi {value['prediction_year']}"
+            prediction_options.append((key, option_text))
         
-        regression_data.append({
-            "No": row_num,
-            "Kota": "Kab. Malang",
-            "Tahun Model": year,
-            "Persamaan Regresi": f"Y = {intercept:.4f} + {coefficients[0]:.4f}X₁ + {coefficients[1]:.4f}X₂ + {coefficients[2]:.4f}X₃"
-        })
-        row_num += 1
-
-    # Tambahkan data Lumajang
-    for year in sorted(st.session_state.models_lumajang.keys()):
-        model = st.session_state.models_lumajang[year]
-        coefficients = model.coef_
-        intercept = model.intercept_
+        selected_key = st.selectbox(
+            "Pilih Hasil Prediksi yang akan Ditampilkan",
+            options=[key for key, _ in prediction_options],
+            format_func=lambda x: next(text for key, text in prediction_options if key == x)
+        )
         
-        regression_data.append({
-            "No": row_num,
-            "Kota": "Lumajang",
-            "Tahun Model": year,
-            "Persamaan Regresi": f"Y = {intercept:.4f} + {coefficients[0]:.4f}X₁ + {coefficients[1]:.4f}X₂ + {coefficients[2]:.4f}X₃"
-        })
-        row_num += 1
-
-    # Buat dan tampilkan tabel
-    if regression_data:
-        regression_df = pd.DataFrame(regression_data)
-        st.table(regression_df)
-    else:
-        st.info("Belum ada model yang dilatih. Silakan latih model di menu Data Aktual.")
-
-    # Rest of the Hasil page code
-    if not st.session_state.prediction_history:
-        st.info("Belum ada hasil prediksi yang tersimpan. Silakan lakukan prediksi terlebih dahulu.")
-    else:
-        history_df = pd.DataFrame(st.session_state.prediction_history)
-        
-        # Filter options
-        col1, col2 = st.columns(2)
-        with col1:
-            filter_city = st.multiselect("Filter berdasarkan Kota", options=["Malang", "Lumajang"], default=["Malang", "Lumajang"])
-        
-        with col2:
-            model_years = set()
-            for item in st.session_state.prediction_history:
-                model_years.add(item["year_model"])
-            filter_year = st.multiselect("Filter berdasarkan Tahun Model", options=sorted(list(model_years)), default=sorted(list(model_years)))
-        
-        # Apply filters
-        filtered_df = history_df[
-            (history_df["city"].isin(filter_city)) & 
-            (history_df["year_model"].isin(filter_year))
-        ]
-        
-        # Display filtered results
-        if not filtered_df.empty:
-            st.dataframe(filtered_df)
+        if selected_key:
+            result = st.session_state.selected_prediction_data[selected_key]
             
-            # Download results
-            csv = filtered_df.to_csv(index=False)
-            b64 = base64.b64encode(csv.encode()).decode()
-            href = f'<a href="data:file/csv;base64,{b64}" download="prediction_history.csv">Download Riwayat Prediksi (CSV)</a>'
-            st.markdown(href, unsafe_allow_html=True)
+            # 1. PERSAMAAN
+            st.subheader("1. Persamaan Regresi")
+            model = result['model']
+            coefficients = model.coef_
+            intercept = model.intercept_
             
-            # Visualization
-            st.markdown("### Visualisasi Hasil Prediksi")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown(f"**Y = {intercept:.4f} + {coefficients[0]:.4f}X₁ + {coefficients[1]:.4f}X₂ + {coefficients[2]:.4f}X₃**")
+            with col2:
+                st.markdown(f"- a = {intercept:.4f}")
+                st.markdown(f"- b₁ = {coefficients[0]:.4f}")
+                st.markdown(f"- b₂ = {coefficients[1]:.4f}")
+                st.markdown(f"- b₃ = {coefficients[2]:.4f}")
             
-            # Plot predictions over time
-            fig, ax = plt.subplots(figsize=(12, 6))
-            for city in filter_city:
-                city_data = filtered_df[filtered_df["city"] == city]
-                if not city_data.empty:
-                    ax.plot(city_data.index, city_data["prediction"], 'o-', label=f"{city}")
+            # 2. HASIL PREDIKSI DAN AKTUAL
+            st.subheader("2. Hasil Prediksi dan Data Aktual")
             
-            ax.set_xlabel("Urutan Prediksi")
-            ax.set_ylabel("Hasil Prediksi (ton)")
-            ax.set_title("Hasil Prediksi Berdasarkan Waktu")
-            ax.legend()
+            data = result['data']
+            X = data[['X1(CURAH HUJAN)', 'X2(SUHU)', 'X3(LUAS PANEN)']]
+            y_actual = data['Y']
+            y_pred = model.predict(X)
+            
+            # Buat tabel perbandingan
+            comparison_df = pd.DataFrame({
+                'Bulan': [f"Bulan {i+1}" for i in range(len(data))],
+                'Curah Hujan': data['X1(CURAH HUJAN)'].values,
+                'Suhu': data['X2(SUHU)'].values,
+                'Luas Panen': data['X3(LUAS PANEN)'].values,
+                'Hasil Aktual': y_actual.values,
+                'Hasil Prediksi': y_pred,
+                'Selisih': abs(y_actual.values - y_pred)
+            })
+            
+            st.dataframe(comparison_df)
+            
+            # Tampilkan input dan hasil prediksi baru
+            st.markdown("### Prediksi untuk Data Baru")
+            input_data = result['input_data']
+            st.markdown(f"**Input:** Curah Hujan = {input_data['curah_hujan']}, Suhu = {input_data['suhu']}, Luas Panen = {input_data['luas_panen']}")
+            st.markdown(f"**Hasil Prediksi:** {result['prediction']:.3f} ton")
+            
+            # 3. UJI AKURASI RMSE
+            st.subheader("3. Uji Akurasi (RMSE)")
+            rmse = np.sqrt(mean_squared_error(y_actual, y_pred))
+            st.markdown(f"**RMSE = {rmse:.4f}**")
+            
+            # Interpretasi RMSE
+            mean_actual = np.mean(y_actual)
+            rmse_percentage = (rmse / mean_actual) * 100
+            st.markdown(f"**RMSE sebagai persentase dari rata-rata aktual: {rmse_percentage:.2f}%**")
+            
+            if rmse_percentage < 10:
+                st.success("Model memiliki akurasi yang sangat baik (RMSE < 10%)")
+            elif rmse_percentage < 20:
+                st.warning("Model memiliki akurasi yang baik (RMSE 10-20%)")
+            else:
+                st.error("Model memiliki akurasi yang perlu diperbaiki (RMSE > 20%)")
+            
+            # 4. VISUALISASI PERBANDINGAN
+            st.subheader("4. Visualisasi Perbandingan Prediksi dan Aktual")
+            
+            # Plot perbandingan
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+            
+            # Plot 1: Line chart perbandingan
+            months = range(1, len(y_actual) + 1)
+            ax1.plot(months, y_actual, 'b-o', label='Aktual', linewidth=2, markersize=8)
+            ax1.plot(months, y_pred, 'r--s', label='Prediksi', linewidth=2, markersize=8)
+            ax1.set_xlabel('Bulan')
+            ax1.set_ylabel('Hasil Panen (ton)')
+            ax1.set_title(f'Perbandingan Hasil Aktual vs Prediksi\n{result["city"]} - Model {result["data_year"]}')
+            ax1.legend()
+            ax1.grid(True, alpha=0.3)
+            
+            # Plot 2: Scatter plot
+            ax2.scatter(y_actual, y_pred, alpha=0.7, s=100)
+            ax2.plot([y_actual.min(), y_actual.max()], [y_actual.min(), y_actual.max()], 'r--', lw=2)
+            ax2.set_xlabel('Hasil Aktual (ton)')
+            ax2.set_ylabel('Hasil Prediksi (ton)')
+            ax2.set_title('Scatter Plot: Aktual vs Prediksi')
+            ax2.grid(True, alpha=0.3)
+            
+            # Tambahkan R²
+            from sklearn.metrics import r2_score
+            r2 = r2_score(y_actual, y_pred)
+            ax2.text(0.05, 0.95, f'R² = {r2:.4f}', transform=ax2.transAxes, 
+                    bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+            
+            plt.tight_layout()
             st.pyplot(fig)
             
-            # Distribution of predictions
-            fig, ax = plt.subplots(figsize=(12, 6))
-            for city in filter_city:
-                city_data = filtered_df[filtered_df["city"] == city]
-                if not city_data.empty:
-                    sns.histplot(city_data["prediction"], kde=True, label=city, ax=ax, alpha=0.6)
+            # Tabel ringkasan statistik
+            st.subheader("5. Ringkasan Statistik")
             
-            ax.set_xlabel("Hasil Prediksi (ton)")
-            ax.set_ylabel("Frekuensi")
-            ax.set_title("Distribusi Hasil Prediksi")
-            ax.legend()
-            st.pyplot(fig)
+            col1, col2, col3, col4 = st.columns(4)
             
-            # Correlation between input variables and prediction
-            st.markdown("### Korelasi Antar Variabel")
+            with col1:
+                st.metric("RMSE", f"{rmse:.4f}")
             
-            corr_vars = ["curah_hujan", "suhu", "luas_panen", "prediction"]
-            for city in filter_city:
-                city_data = filtered_df[filtered_df["city"] == city]
-                if not city_data.empty:
-                    st.markdown(f"**Kota {city}**")
-                    correlation = city_data[corr_vars].corr()
-                    
-                    fig, ax = plt.subplots(figsize=(8, 6))
-                    sns.heatmap(correlation, annot=True, cmap="coolwarm", ax=ax)
-                    ax.set_title(f"Korelasi Antar Variabel - {city}")
-                    st.pyplot(fig)
-        else:
-            st.info("Tidak ada data yang sesuai dengan filter.")
+            with col2:
+                st.metric("R²", f"{r2:.4f}")
             
-        # Add a reset button
-        if st.button("Reset Riwayat Prediksi"):
-            st.session_state.prediction_history = []
-            st.success("Riwayat prediksi berhasil direset!")
-            st.rerun()
+            with col3:
+                mae = np.mean(abs(y_actual - y_pred))
+                st.metric("MAE", f"{mae:.4f}")
+            
+            with col4:
+                mape = np.mean(abs((y_actual - y_pred) / y_actual)) * 100
+                st.metric("MAPE (%)", f"{mape:.2f}")
+            
+            # Download hasil
+            st.subheader("6. Download Hasil")
+            
+            # Buat summary dataframe
+            summary_df = pd.DataFrame({
+                'Metrik': ['RMSE', 'R²', 'MAE', 'MAPE (%)'],
+                'Nilai': [rmse, r2, mae, mape]
+            })
+            
+            # Gabungkan dengan data perbandingan
+            export_data = {
+                'Info': [
+                    f"Kota: {result['city']}",
+                    f"Tahun Model: {result['data_year']}",
+                    f"Tahun Prediksi: {result['prediction_year']}",
+                    f"Persamaan: Y = {intercept:.4f} + {coefficients[0]:.4f}X₁ + {coefficients[1]:.4f}X₂ + {coefficients[2]:.4f}X₃"
+                ],
+                'Comparison': comparison_df,
+                'Metrics': summary_df
+            }
+            
+            # Create download button
+            csv_data = []
+            csv_data.append("=== INFORMASI MODEL ===")
+            csv_data.append(f"Kota,{result['city']}")
+            csv_data.append(f"Tahun Model,{result['data_year']}")
+            csv_data.append(f"Tahun Prediksi,{result['prediction_year']}")
+            csv_data.append(f"Persamaan,Y = {intercept:.4f} + {coefficients[0]:.4f}X₁ + {coefficients[1]:.4f}X₂ + {coefficients[2]:.4f}X₃")
+            csv_data.append("")
+            csv_data.append("=== DATA PERBANDINGAN ===")
+            csv_data.append(comparison_df.to_csv(index=False))
+            csv_data.append("=== METRIK EVALUASI ===")
+            csv_data.append(summary_df.to_csv(index=False))
+            
+            csv_string = "\n".join(csv_data)
+            
+            st.download_button(
+                label="Download Hasil Lengkap (CSV)",
+                data=csv_string,
+                file_name=f"hasil_prediksi_{result['city']}_{result['data_year']}_{result['prediction_year']}.csv",
+                mime="text/csv"
+            )
