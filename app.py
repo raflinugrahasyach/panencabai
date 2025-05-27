@@ -781,7 +781,7 @@ elif st.session_state.current_page == "Hasil":
             st.markdown(f"**Hasil Prediksi untuk tahun {result['prediction_year']}: {result['prediction']:.3f} ton**")
             
             # 3. EVALUASI MODEL DENGAN DATA TRAINING
-            st.subheader(f"3. Evaluasi Model (menggunakan data tahun {result['data_year']})")
+            st.subheader(f"3. Evaluasi Model pada Data Training (Tahun {result['data_year']})")
             
             training_data = result['training_data']
             X_train = training_data[['X1(CURAH HUJAN)', 'X2(SUHU)', 'X3(LUAS PANEN)']]
@@ -801,104 +801,264 @@ elif st.session_state.current_page == "Hasil":
             
             st.dataframe(comparison_df)
             
-            # 4. UJI AKURASI RMSE (berdasarkan data training)
-            st.subheader("4. Uji Akurasi Model (RMSE)")
-            rmse = np.sqrt(mean_squared_error(y_actual_train, y_pred_train))
-            st.markdown(f"**RMSE = {rmse:.4f}**")
-            st.markdown(f"*(Berdasarkan evaluasi model dengan data tahun {result['data_year']})*")
+            # 4. UJI AKURASI RMSE - VERSI YANG DIPERBAIKI
+            st.subheader("4. Uji Akurasi Model")
             
-            # Interpretasi RMSE
-            mean_actual = np.mean(y_actual_train)
-            rmse_percentage = (rmse / mean_actual) * 100
-            st.markdown(f"**RMSE sebagai persentase dari rata-rata aktual: {rmse_percentage:.2f}%**")
+            # RMSE Training (pada data yang sama)
+            rmse_training = np.sqrt(mean_squared_error(y_actual_train, y_pred_train))
             
-            if rmse_percentage < 10:
-                st.success("Model memiliki akurasi yang sangat baik (RMSE < 10%)")
-            elif rmse_percentage < 20:
-                st.warning("Model memiliki akurasi yang baik (RMSE 10-20%)")
+            # RMSE Cross-Validation (seperti di halaman Data Aktual)
+            prediction_year = result['prediction_year']
+            city = result['city']
+            data_year = result['data_year']
+            
+            # Cek apakah ada RMSE cross-validation yang tersimpan
+            rmse_cross_val = None
+            if city == "Malang" and prediction_year in st.session_state.rmse_malang:
+                rmse_cross_val = st.session_state.rmse_malang[prediction_year]
+            elif city == "Lumajang" and prediction_year in st.session_state.rmse_lumajang:
+                rmse_cross_val = st.session_state.rmse_lumajang[prediction_year]
+            
+            # Jika tidak ada RMSE cross-validation tersimpan, hitung secara langsung
+            if rmse_cross_val is None:
+                # Coba hitung RMSE cross-validation jika ada data untuk tahun yang diprediksi
+                if city == "Malang":
+                    eval_data = st.session_state.data_malang.get(prediction_year)
+                else:
+                    eval_data = st.session_state.data_lumajang.get(prediction_year)
+                
+                if eval_data is not None and not eval_data.empty:
+                    X_eval = eval_data[['X1(CURAH HUJAN)', 'X2(SUHU)', 'X3(LUAS PANEN)']]
+                    y_actual_eval = eval_data['Y']
+                    y_pred_eval = model.predict(X_eval)
+                    rmse_cross_val = np.sqrt(mean_squared_error(y_actual_eval, y_pred_eval))
+            
+            # Tampilkan RMSE dengan penjelasan yang jelas
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("### 📊 RMSE Training Data")
+                st.markdown(f"**{rmse_training:.4f}**")
+                st.markdown("*(Model dievaluasi pada data training tahun {0})*".format(data_year))
+                
+                # Interpretasi RMSE Training
+                mean_actual_train = np.mean(y_actual_train)
+                rmse_percentage_train = (rmse_training / mean_actual_train) * 100
+                st.markdown(f"**{rmse_percentage_train:.2f}%** dari rata-rata aktual")
+            
+            with col2:
+                st.markdown("### 🎯 RMSE Cross-Validation")
+                if rmse_cross_val is not None:
+                    st.markdown(f"**{rmse_cross_val:.4f}**")
+                    st.markdown("*(Model tahun {0} diuji pada data tahun {1})*".format(data_year, prediction_year))
+                    
+                    # Interpretasi RMSE Cross-Validation
+                    if city == "Malang":
+                        eval_data = st.session_state.data_malang.get(prediction_year)
+                    else:
+                        eval_data = st.session_state.data_lumajang.get(prediction_year)
+                    
+                    if eval_data is not None and not eval_data.empty:
+                        mean_actual_eval = np.mean(eval_data['Y'])
+                        rmse_percentage_eval = (rmse_cross_val / mean_actual_eval) * 100
+                        st.markdown(f"**{rmse_percentage_eval:.2f}%** dari rata-rata aktual")
+                else:
+                    st.markdown("**Tidak tersedia**")
+                    st.markdown(f"*(Data aktual tahun {prediction_year} belum ada)*")
+            
+            # Info box tentang perbedaan RMSE
+            st.info("""
+            📍 **Penjelasan RMSE:**
+            - **Training RMSE:** Kesalahan model pada data yang digunakan untuk training (cenderung lebih rendah)
+            - **Cross-Validation RMSE:** Kesalahan model saat memprediksi data tahun yang berbeda (lebih representatif untuk performa sesungguhnya)
+            - Cross-Validation RMSE biasanya lebih tinggi karena menguji kemampuan generalisasi model
+            """)
+            
+            # Tentukan RMSE mana yang akan digunakan untuk evaluasi utama
+            primary_rmse = rmse_cross_val if rmse_cross_val is not None else rmse_training
+            primary_rmse_type = "Cross-Validation" if rmse_cross_val is not None else "Training"
+            
+            # Interpretasi akurasi berdasarkan RMSE utama
+            if rmse_cross_val is not None:
+                if city == "Malang":
+                    eval_data = st.session_state.data_malang.get(prediction_year)
+                else:
+                    eval_data = st.session_state.data_lumajang.get(prediction_year)
+                mean_for_percentage = np.mean(eval_data['Y']) if eval_data is not None and not eval_data.empty else mean_actual_train
             else:
-                st.error("Model memiliki akurasi yang perlu diperbaiki (RMSE > 20%)")
+                mean_for_percentage = mean_actual_train
             
-            # 5. VISUALISASI PERBANDINGAN (untuk data training)
-            st.subheader(f"5. Visualisasi Evaluasi Model (Data Tahun {result['data_year']})")
+            primary_rmse_percentage = (primary_rmse / mean_for_percentage) * 100
             
-            # Plot perbandingan
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
-            
-            # Plot 1: Line chart perbandingan
-            months = range(1, len(y_actual_train) + 1)
-            ax1.plot(months, y_actual_train, 'b-o', label='Aktual', linewidth=2, markersize=8)
-            ax1.plot(months, y_pred_train, 'r--s', label='Prediksi Model', linewidth=2, markersize=8)
-            ax1.set_xlabel('Bulan')
-            ax1.set_ylabel('Hasil Panen (ton)')
-            ax1.set_title(f'Evaluasi Model: Aktual vs Prediksi\n{result["city"]} - Tahun {result["data_year"]}')
-            ax1.legend()
-            ax1.grid(True, alpha=0.3)
-            
-            # Plot 2: Scatter plot
-            ax2.scatter(y_actual_train, y_pred_train, alpha=0.7, s=100)
-            ax2.plot([y_actual_train.min(), y_actual_train.max()], [y_actual_train.min(), y_actual_train.max()], 'r--', lw=2)
-            ax2.set_xlabel('Hasil Aktual (ton)')
-            ax2.set_ylabel('Hasil Prediksi Model (ton)')
-            ax2.set_title('Scatter Plot: Aktual vs Prediksi Model')
-            ax2.grid(True, alpha=0.3)
-            
-            # Tambahkan R²
-            from sklearn.metrics import r2_score
-            r2 = r2_score(y_actual_train, y_pred_train)
-            ax2.text(0.05, 0.95, f'R² = {r2:.4f}', transform=ax2.transAxes, 
-                    bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
-            
-            plt.tight_layout()
-            st.pyplot(fig)
-            
-            # 6. JIKA ADA DATA AKTUAL UNTUK TAHUN YANG DIPREDIKSI
-            st.subheader(f"6. Perbandingan dengan Data Aktual Tahun {result['prediction_year']} (jika ada)")
-            
-            # Cek apakah ada data aktual untuk tahun yang diprediksi
-            if result['city'] == "Malang":
-                actual_data_pred_year = st.session_state.data_malang.get(result['prediction_year'])
+            st.markdown(f"### 📈 Evaluasi Akurasi Model ({primary_rmse_type})")
+            if primary_rmse_percentage < 10:
+                st.success(f"Model memiliki akurasi yang sangat baik (RMSE {primary_rmse_type}: {primary_rmse_percentage:.2f}% < 10%)")
+            elif primary_rmse_percentage < 20:
+                st.warning(f"Model memiliki akurasi yang baik (RMSE {primary_rmse_type}: {primary_rmse_percentage:.2f}% = 10-20%)")
             else:
-                actual_data_pred_year = st.session_state.data_lumajang.get(result['prediction_year'])
+                st.error(f"Model memiliki akurasi yang perlu diperbaiki (RMSE {primary_rmse_type}: {primary_rmse_percentage:.2f}% > 20%)")
+            
+            # 5. JIKA ADA DATA AKTUAL UNTUK TAHUN YANG DIPREDIKSI - EVALUASI LENGKAP
+            st.subheader(f"5. Evaluasi Cross-Validation (Data Aktual Tahun {prediction_year})")
+            
+            if city == "Malang":
+                actual_data_pred_year = st.session_state.data_malang.get(prediction_year)
+            else:
+                actual_data_pred_year = st.session_state.data_lumajang.get(prediction_year)
             
             if actual_data_pred_year is not None and not actual_data_pred_year.empty:
-                st.markdown(f"**Data aktual untuk tahun {result['prediction_year']} ditemukan:**")
-                st.dataframe(actual_data_pred_year)
+                st.markdown(f"**Data aktual untuk tahun {prediction_year} ditemukan. Berikut evaluasi cross-validation:**")
                 
-                # Hitung RMSE untuk prediksi tahun yang dituju
-                if len(actual_data_pred_year) > 0:
-                    # Bandingkan dengan data input yang sama jika ada
-                    st.markdown("**Catatan:** Untuk perbandingan yang akurat, diperlukan data aktual dengan input yang sama dengan prediksi.")
+                # Evaluasi cross-validation
+                X_eval = actual_data_pred_year[['X1(CURAH HUJAN)', 'X2(SUHU)', 'X3(LUAS PANEN)']]
+                y_actual_eval = actual_data_pred_year['Y']
+                y_pred_eval = model.predict(X_eval)
+                
+                # Tabel perbandingan cross-validation
+                comparison_eval_df = pd.DataFrame({
+                    'Bulan': [f"Bulan {i+1}" for i in range(len(actual_data_pred_year))],
+                    'Curah Hujan': actual_data_pred_year['X1(CURAH HUJAN)'].values,
+                    'Suhu': actual_data_pred_year['X2(SUHU)'].values,
+                    'Luas Panen': actual_data_pred_year['X3(LUAS PANEN)'].values,
+                    'Hasil Aktual': y_actual_eval.values,
+                    'Hasil Prediksi Model': y_pred_eval,
+                    'Selisih': abs(y_actual_eval.values - y_pred_eval)
+                })
+                
+                st.dataframe(comparison_eval_df)
+                
+                # Hitung ulang RMSE cross-validation untuk memastikan konsistensi
+                rmse_cross_val_calculated = np.sqrt(mean_squared_error(y_actual_eval, y_pred_eval))
+                st.markdown(f"**RMSE Cross-Validation (Terhitung): {rmse_cross_val_calculated:.4f}**")
+                
+                # Bandingkan dengan RMSE yang tersimpan jika ada
+                if rmse_cross_val is not None:
+                    if abs(rmse_cross_val - rmse_cross_val_calculated) < 0.0001:
+                        st.success("✅ RMSE konsisten dengan perhitungan di halaman Data Aktual")
+                    else:
+                        st.warning(f"⚠️ RMSE berbeda dengan yang tersimpan ({rmse_cross_val:.4f}). Gunakan nilai terhitung.")
+                        rmse_cross_val = rmse_cross_val_calculated
             else:
-                st.info(f"Data aktual untuk tahun {result['prediction_year']} belum tersedia.")
+                st.info(f"Data aktual untuk tahun {prediction_year} belum tersedia. Cross-validation tidak dapat dilakukan.")
             
-            # Tabel ringkasan statistik
+            # 6. VISUALISASI PERBANDINGAN
+            st.subheader("6. Visualisasi Evaluasi Model")
+            
+            # Tentukan data mana yang akan divisualisasikan
+            if actual_data_pred_year is not None and not actual_data_pred_year.empty:
+                # Visualisasi cross-validation
+                fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+                
+                # Plot 1: Cross-validation comparison
+                months_eval = range(1, len(y_actual_eval) + 1)
+                ax1.plot(months_eval, y_actual_eval, 'b-o', label='Aktual', linewidth=2, markersize=8)
+                ax1.plot(months_eval, y_pred_eval, 'r--s', label='Prediksi Model', linewidth=2, markersize=8)
+                ax1.set_xlabel('Bulan')
+                ax1.set_ylabel('Hasil Panen (ton)')
+                ax1.set_title(f'Cross-Validation: Model {data_year} → Data {prediction_year}\n{city}')
+                ax1.legend()
+                ax1.grid(True, alpha=0.3)
+                
+                # Plot 2: Scatter plot cross-validation
+                ax2.scatter(y_actual_eval, y_pred_eval, alpha=0.7, s=100, color='red', label='Cross-Validation')
+                ax2.plot([y_actual_eval.min(), y_actual_eval.max()], [y_actual_eval.min(), y_actual_eval.max()], 'r--', lw=2)
+                ax2.set_xlabel('Hasil Aktual (ton)')
+                ax2.set_ylabel('Hasil Prediksi Model (ton)')
+                ax2.set_title('Cross-Validation: Aktual vs Prediksi')
+                ax2.grid(True, alpha=0.3)
+                
+                # R² untuk cross-validation
+                from sklearn.metrics import r2_score
+                r2_cross = r2_score(y_actual_eval, y_pred_eval)
+                ax2.text(0.05, 0.95, f'R² = {r2_cross:.4f}', transform=ax2.transAxes, 
+                        bbox=dict(boxstyle='round', facecolor='lightcoral', alpha=0.8))
+                
+                plt.tight_layout()
+                st.pyplot(fig)
+                
+                # Metrik untuk cross-validation
+                mae_cross = np.mean(abs(y_actual_eval - y_pred_eval))
+                mape_cross = np.mean(abs((y_actual_eval - y_pred_eval) / y_actual_eval)) * 100
+                
+            else:
+                # Visualisasi training data saja
+                fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+                
+                # Plot 1: Training data comparison
+                months_train = range(1, len(y_actual_train) + 1)
+                ax1.plot(months_train, y_actual_train, 'b-o', label='Aktual', linewidth=2, markersize=8)
+                ax1.plot(months_train, y_pred_train, 'g--s', label='Prediksi Model', linewidth=2, markersize=8)
+                ax1.set_xlabel('Bulan')
+                ax1.set_ylabel('Hasil Panen (ton)')
+                ax1.set_title(f'Training Data: Model dan Data Tahun {data_year}\n{city}')
+                ax1.legend()
+                ax1.grid(True, alpha=0.3)
+                
+                # Plot 2: Scatter plot training
+                ax2.scatter(y_actual_train, y_pred_train, alpha=0.7, s=100, color='green', label='Training')
+                ax2.plot([y_actual_train.min(), y_actual_train.max()], [y_actual_train.min(), y_actual_train.max()], 'g--', lw=2)
+                ax2.set_xlabel('Hasil Aktual (ton)')
+                ax2.set_ylabel('Hasil Prediksi Model (ton)')
+                ax2.set_title('Training Data: Aktual vs Prediksi')
+                ax2.grid(True, alpha=0.3)
+                
+                # R² untuk training
+                from sklearn.metrics import r2_score
+                r2_train = r2_score(y_actual_train, y_pred_train)
+                ax2.text(0.05, 0.95, f'R² = {r2_train:.4f}', transform=ax2.transAxes, 
+                        bbox=dict(boxstyle='round', facecolor='lightgreen', alpha=0.8))
+                
+                plt.tight_layout()
+                st.pyplot(fig)
+                
+                # Metrik untuk training
+                mae_cross = np.mean(abs(y_actual_train - y_pred_train))
+                mape_cross = np.mean(abs((y_actual_train - y_pred_train) / y_actual_train)) * 100
+                r2_cross = r2_train
+            
+            # 7. RINGKASAN STATISTIK MODEL
             st.subheader("7. Ringkasan Statistik Model")
             
             col1, col2, col3, col4 = st.columns(4)
             
+            # Gunakan metrik cross-validation jika ada, jika tidak gunakan training
+            display_rmse = rmse_cross_val if rmse_cross_val is not None else rmse_training
+            display_type = "Cross-Val" if rmse_cross_val is not None else "Training"
+            
             with col1:
-                st.metric("RMSE", f"{rmse:.4f}")
+                st.metric(f"RMSE ({display_type})", f"{display_rmse:.4f}")
             
             with col2:
-                st.metric("R²", f"{r2:.4f}")
+                st.metric("R²", f"{r2_cross:.4f}")
             
             with col3:
-                mae = np.mean(abs(y_actual_train - y_pred_train))
-                st.metric("MAE", f"{mae:.4f}")
+                st.metric("MAE", f"{mae_cross:.4f}")
             
             with col4:
-                mape = np.mean(abs((y_actual_train - y_pred_train) / y_actual_train)) * 100
-                st.metric("MAPE (%)", f"{mape:.2f}")
+                st.metric("MAPE (%)", f"{mape_cross:.2f}")
             
-            # Download hasil
+            # Tampilkan juga metrik training jika cross-validation tersedia
+            if rmse_cross_val is not None:
+                st.markdown("**Perbandingan Metrik:**")
+                comparison_metrics = pd.DataFrame({
+                    'Metrik': ['RMSE', 'R²', 'MAE', 'MAPE (%)'],
+                    'Training Data': [
+                        f"{rmse_training:.4f}",
+                        f"{r2_score(y_actual_train, y_pred_train):.4f}",
+                        f"{np.mean(abs(y_actual_train - y_pred_train)):.4f}",
+                        f"{np.mean(abs((y_actual_train - y_pred_train) / y_actual_train)) * 100:.2f}"
+                    ],
+                    'Cross-Validation': [
+                        f"{rmse_cross_val:.4f}",
+                        f"{r2_cross:.4f}",
+                        f"{mae_cross:.4f}",
+                        f"{mape_cross:.2f}"
+                    ]
+                })
+                st.dataframe(comparison_metrics)
+            
+            # 8. DOWNLOAD HASIL
             st.subheader("8. Download Hasil")
-            
-            # Buat summary dataframe
-            summary_df = pd.DataFrame({
-                'Metrik': ['RMSE', 'R²', 'MAE', 'MAPE (%)'],
-                'Nilai': [rmse, r2, mae, mape]
-            })
             
             # Create download button
             csv_data = []
@@ -914,10 +1074,20 @@ elif st.session_state.current_page == "Hasil":
             csv_data.append(f"Input Luas Panen,{input_data['luas_panen']}")
             csv_data.append(f"Hasil Prediksi,{result['prediction']:.3f}")
             csv_data.append("")
-            csv_data.append("=== EVALUASI MODEL (DATA TRAINING {0}) ===".format(result['data_year']))
+            csv_data.append("=== EVALUASI MODEL ===")
+            csv_data.append(f"RMSE Training,{rmse_training:.4f}")
+            if rmse_cross_val is not None:
+                csv_data.append(f"RMSE Cross-Validation,{rmse_cross_val:.4f}")
+            csv_data.append(f"R²,{r2_cross:.4f}")
+            csv_data.append(f"MAE,{mae_cross:.4f}")
+            csv_data.append(f"MAPE (%),{mape_cross:.2f}")
+            csv_data.append("")
+            csv_data.append("=== DATA TRAINING ({0}) ===".format(result['data_year']))
             csv_data.append(comparison_df.to_csv(index=False))
-            csv_data.append("=== METRIK EVALUASI ===")
-            csv_data.append(summary_df.to_csv(index=False))
+            
+            if actual_data_pred_year is not None and not actual_data_pred_year.empty:
+                csv_data.append("=== DATA CROSS-VALIDATION ({0}) ===".format(prediction_year))
+                csv_data.append(comparison_eval_df.to_csv(index=False))
             
             csv_string = "\n".join(csv_data)
             
